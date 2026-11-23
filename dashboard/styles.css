@@ -358,7 +358,7 @@ main { display: flex; flex-direction: column; gap: 20px; margin-top: 20px; }
 .model-card-top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
 .model-card-name { font-family: var(--font-display); font-size: 20px; font-weight: 700; }
 .model-card.best .model-card-name::after { content: " ✓ best"; font-family: var(--font-mono); font-size: 10px; color: var(--gold); font-weight: 400; }
-.model-metrics { display: flex; gap: 18px; margin-bottom: 10px; }
+.model-metrics { display: flex; gap: 18px; margin-bottom: 10px; flex-wrap: wrap; }
 .metric { font-family: var(--font-mono); }
 .metric-val { font-size: 16px; color: var(--text); }
 .metric-label { font-size: 10px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.06em; display: block; }
@@ -377,12 +377,16 @@ main { display: flex; flex-direction: column; gap: 20px; margin-top: 20px; }
 }
 .forecast-tab.active { color: #17130a; background: var(--cyan); border-color: var(--cyan); }
 
-.forecast-metrics { display: flex; gap: 18px; margin-top: 14px; flex-wrap: wrap; }
-.fm-arch { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 10px 14px; flex: 1; min-width: 140px; background: var(--panel-2); }
+.forecast-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin-top: 14px; }
+.fm-arch { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 10px 14px; min-width: 0; background: var(--panel-2); }
 .fm-arch.best { border-color: var(--gold); }
 .fm-arch-name { font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-dim); margin-bottom: 6px; display: flex; justify-content: space-between; }
 .fm-arch.best .fm-arch-name { color: var(--gold); }
-.fm-arch-metrics { display: flex; gap: 14px; }
+.fm-arch-metrics { display: flex; gap: 12px; flex-wrap: wrap; }
+.region-note { font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); margin: 10px 0 0; line-height: 1.5; }
+.verdict { font-family: var(--font-mono); font-size: 11px; margin-top: 8px; color: var(--text-dim); }
+.verdict.win { color: #6FCB78; }
+.verdict.lose { color: #E4573D; }
 .fm-arch-metrics .metric-val { font-size: 14px; }
 
 /* ============================================================

@@ -26,10 +26,11 @@ SUBINDEX_RECIPE = {
         {"variable": "ndvi", "lo": -0.1, "hi": 0.9, "invert": False, "weight": 1.0},
     ],
     "water": [
-        {"variable": "ndwi", "lo": -0.3, "hi": 0.4, "invert": False, "weight": 1.0},
+        {"variable": "soil_moisture", "lo": 0.05, "hi": 0.45, "invert": False, "weight": 1.0},
     ],
     "climate": [
-        {"variable": "precipitation_total", "lo": 0, "hi": 15, "invert": False, "weight": 0.5},
+        # 30-day mean rainfall: one dry day is not a drought
+        {"variable": "precipitation_total_roll30_mean", "lo": 0, "hi": 15, "invert": False, "weight": 0.5},
         # Climate comfort penalizes distance from ~295K (~22C), not raw heat.
         {"variable": "temperature_2m", "lo": 0, "hi": 15, "invert": True, "weight": 0.5,
          "transform": "distance_from_295k"},

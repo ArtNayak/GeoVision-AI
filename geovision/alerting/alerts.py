@@ -38,6 +38,10 @@ class Alert:
     context: dict = field(default_factory=dict)
 
 
+def _label(indicator: str) -> str:
+    return "EHI" if indicator == "ehi" else indicator.replace("_", " ").title()
+
+
 def _severity_for_threshold(value: float, floor: float) -> str:
     if value < floor * 0.5:
         return "critical"
@@ -66,7 +70,7 @@ def check_thresholds(latest: pd.DataFrame) -> list[Alert]:
                         indicator=indicator,
                         value=value,
                         message=(
-                            f"{indicator.replace('_', ' ').title()} at {value:.1f} "
+                            f"{_label(indicator)} at {value:.1f} "
                             f"is below the {floor:.0f} threshold for {region_name}."
                         ),
                     )
@@ -109,7 +113,7 @@ def check_rapid_decline(history: pd.DataFrame) -> list[Alert]:
                         indicator=indicator,
                         value=float(latest_val),
                         message=(
-                            f"{indicator.replace('_', ' ').title()} for {region_name} dropped "
+                            f"{_label(indicator)} for {region_name} dropped "
                             f"{drop:.1f} points in {RAPID_DECLINE_WINDOW_DAYS} days."
                         ),
                         context={"prior_value": float(prior_val),

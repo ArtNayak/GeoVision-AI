@@ -25,6 +25,8 @@ class RegressionMetrics:
     rmse: float
     mae: float
     r2: float
+    baseline_rmse: float | None = None  # naive 'repeat last value' forecast, for context
+    shrink: float | None = None  # weight on the model's correction to the naive forecast (1 = fully used)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -36,6 +38,8 @@ class ClassificationMetrics:
     kappa: float
     roc_auc: float | None  # None when the model can't produce probabilities
                             # or the task isn't binary/one-vs-rest scorable
+
+    baseline_accuracy: float | None = None  # naive 'condition stays the same' predictor
 
     def to_dict(self) -> dict:
         return asdict(self)

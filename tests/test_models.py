@@ -76,3 +76,17 @@ def test_sequence_forecaster_raises_on_insufficient_data():
     series = np.arange(10, dtype=np.float32)
     with pytest.raises(ValueError):
         SequenceForecaster(arch="lstm", lookback=10, horizon=5, epochs=1).fit(series)
+
+
+def test_pooled_forecaster_returns_shrunk_per_region_results():
+    rng = np.random.default_rng(0)
+    t = np.arange(260)
+    series = {f"R{i}": (np.sin(t / 12.0 + i) * 5 + 50 + rng.normal(0, 0.5, len(t))).astype(np.float32) for i in range(3)}
+    from geovision.models.forecasting import train_and_compare_pooled
+    out = train_and_compare_pooled(series, architectures=["lstm", "cnn"], horizon=5, epochs=3, seeds=(1,))
+    assert set(out) == set(series)
+    for res in out.values():
+        assert set(res) == {"lstm", "cnn", "ensemble"}
+        m = res["lstm"].metrics
+        assert 0.0 <= m.shrink <= 1.0 and m.baseline_rmse > 0  # shrinkage weight and naive baseline reported
+        assert res["lstm"].forecast.shape == (5,)

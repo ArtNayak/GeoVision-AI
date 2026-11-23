@@ -21,9 +21,8 @@ ML/DL analytics → Index fusion → API → Dashboard, with alerting throughout
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-# 1. Generate a static demo snapshot (works with zero credentials --
-#    ingestion falls back to a seeded synthetic generator, see "Data modes")
-python scripts/run_demo.py
+# 1. Generate a static demo snapshot from real data (needs internet, no API keys)
+python scripts/run_demo.py   # fetches data + trains all models for all 13 regions in parallel (GPU if available, ~2.5 min)
 
 # 2. Run the full stack (API + dashboard, served together)
 uvicorn geovision.api.main:app --reload
@@ -37,7 +36,7 @@ file is opened as a static export), falls back to the bundled
 Run the tests:
 
 ```bash
-pip install pytest
+# pytest and httpx come with requirements.txt; the suite calls the real (free) data APIs, ~5 min
 pytest                    # full suite (~10s)
 pytest -m "not slow"      # skip the end-to-end /api/train integration test
 ```
@@ -49,13 +48,11 @@ geovision/
   config.py                 Settings + the region registry (country/state/city/continent)
   ingestion/                 Data-source layer (Stage 1)
     base.py                  Observation contract + BaseIngestionClient
-    planetary_computer_client.py  Microsoft Planetary Computer (STAC): Sentinel-2, Landsat-8/9, MODIS
-    era5_client.py             ERA5 climate reanalysis (Copernicus CDS)
-    precipitation_client.py    Precipitation via NASA POWER (free, no key)
-    openaq_client.py           OpenAQ ground air-quality stations
-    synthetic.py               Seeded synthetic generator (offline dev/demo fallback)
+    open_meteo_client.py       Open-Meteo: temperature, precipitation, soil moisture, PM2.5, NO2
+    modis_ndvi_client.py       NASA MODIS NDVI (ORNL web service)
+    synthetic.py               Seeded synthetic generator (test fixture only)
     pipeline.py                 Orchestrates all sources with per-source fallback
-  preprocessing/              Stage 2: cloud masking, range validation, gap-fill
+  preprocessing/              Stage 2: range validation, gap-fill
   features/                    Stage 3: pivot, rolling stats, anomalies, PCA
   models/                      Stage 4/5: ML/DL training + validation
     classifiers.py              Random Forest & XGBoost (environmental condition class)
@@ -70,43 +67,18 @@ scripts/run_demo.py            End-to-end CLI demo -> dashboard/demo_data.json
 tests/                          pytest suite covering every layer above
 ```
 
-## Data modes: live vs. synthetic
+## Data sources (all real, all free, no API keys)
 
-Every ingestion client implements the same `fetch(region_id, start, end) ->
-list[Observation]` interface (`geovision/ingestion/base.py`). Each checks
-`is_configured()` before hitting its live API; if credentials are missing,
-`IngestionPipeline` transparently substitutes the seeded synthetic
-generator **for that source only**, so the rest of the pipeline never
-needs to know which mode it's in.
-
-Planetary Computer and NASA POWER need **no credentials at all** -- their
-data is public. Set whichever of the rest you have:
-
-| Variable | Source | Used by |
+| Variable | Source | Client |
 |---|---|---|
-| `PC_SDK_SUBSCRIPTION_KEY` *(optional)* | Microsoft Planetary Computer | `planetary_computer_client.py` |
-| `CDS_API_KEY` | Copernicus Climate Data Store (ERA5) | `era5_client.py` |
-| `OPENAQ_API_KEY` | OpenAQ v3 | `openaq_client.py` |
-| *(none needed)* | NASA POWER (precipitation) | `precipitation_client.py` |
+| Temperature, precipitation | Open-Meteo archive (ERA5 reanalysis) | `ingestion/open_meteo_client.py` |
+| Soil moisture 0-100 cm (water sub-index) | Open-Meteo archive (ERA5-Land) | `ingestion/open_meteo_client.py` |
+| PM2.5, NO2 | Open-Meteo air-quality API (CAMS reanalysis) | `ingestion/open_meteo_client.py` |
+| NDVI (vegetation) | NASA ORNL DAAC MODIS MOD13Q1, 250 m / 16-day composites | `ingestion/modis_ndvi_client.py` |
 
-Notes:
-- **Planetary Computer**: works immediately with `pip install
-  pystac-client planetary-computer rioxarray odc-stac` -- no signup
-  required. A free subscription key from
-  [planetarycomputer.microsoft.com/account/request](https://planetarycomputer.microsoft.com/account/request)
-  just raises your request-rate limit.
-- **ERA5**: `era5_client.py` documents the CDS async request/download
-  cycle needed for live retrieval (`cdsapi.Client().retrieve(...)`) --
-  wire it up once you have a CDS account; it's intentionally left as a
-  documented extension point rather than silently faked.
-- **OpenAQ**: get a free API key at [explore.openaq.org](https://explore.openaq.org).
-- **Precipitation**: CHIRPS itself isn't hosted on Planetary Computer, so
-  this variable now comes from NASA POWER's public REST API instead --
-  free forever, no key.
-
-Without a network connection at all, `python scripts/run_demo.py` and
-`uvicorn geovision.api.main:app` both still work out of the box on
-synthetic data -- useful for development, demos, and this sandbox.
+Values are the mean over the **land points of a grid inside each region's bounding box** (plus the centroid; ocean points are excluded, NDVI uses up to 5 land points with a 5 km window and clear-pixel filtering). There is **no synthetic fallback**:
+if a source is down, the request fails rather than showing made-up numbers.
+`ingestion/synthetic.py` remains only as a unit-test fixture.
 
 ## API
 
@@ -117,8 +89,8 @@ Once running (`uvicorn geovision.api.main:app`):
 | `GET /api/regions` | Region registry (id, name, level, coordinates) |
 | `GET /api/ehi?region_id=IN&days=180` | EHI + sub-index time series for one region |
 | `GET /api/compare?region_ids=IN,US,BR&days=180` | Latest snapshot across regions, for comparison |
-| `GET /api/alerts?region_ids=IN,US&days=90` | Active threshold/rapid-decline alerts |
-| `GET /api/train?region_id=IN&days=240&horizon=14&epochs=40` | Runs RF/XGBoost + CNN/LSTM/Transformer and returns validation metrics |
+| `GET /api/alerts?region_ids=IN,US&days=180` | Active threshold/rapid-decline alerts |
+| `GET /api/train?region_id=IN&days=730&horizon=14&epochs=40` | Trains RF/XGBoost + LSTM/CNN/Transformer (+ensemble) for ONE region and returns validation metrics. The dashboard instead shows the pooled all-region results precomputed by `scripts/run_demo.py` |
 | `GET /cache-status` | Interactive visual HTML dashboard showing live cache state for all 13 regions |
 | `GET /api/regions/status` | Fast JSON status endpoint returning cache & EHI metrics for all 13 regions (<60ms) |
 | `GET /api/cache/status` | In-memory and disk cache diagnostic overview |
@@ -130,12 +102,11 @@ default settings) and is cached per day; for production, put it behind a
 task queue and a job-status endpoint instead of blocking the request.
 Interactive docs are auto-served at `/docs`.
 
-## Detailed Documentation Guides
+## Documentation
 
-- **[User Manual (`usermanual.md`)](file:///c:/Users/rijul/Desktop/College/SEM-7/DAV/Code%202/geovision-ai/usermanual.md):** Complete guide on operating the platform, understanding the dashboard, and interpreting ML/DL models.
-- **[Caching Architecture Guide (`caching.md`)](file:///c:/Users/rijul/Desktop/College/SEM-7/DAV/Code%202/geovision-ai/caching.md):** Deep technical dive into the two-tier caching system (Memory + Disk `.pkl`), key schemas, atomic writes, and performance optimizations.
-- **[Engineering Challenges & Solutions (`challenges.md`)](file:///c:/Users/rijul/Desktop/College/SEM-7/DAV/Code%202/geovision-ai/challenges.md):** Log of real-world bugs, architectural hurdles (GIL locks, NaN serialization, PyTorch multi-threading), and their resolutions.
-
+- **[GeoVision_Project_Technical_Report.md](GeoVision_Project_Technical_Report.md)** -- complete, current technical description of the whole project (architecture, data, models, API, dashboard, results, audits, limitations).
+- **[GeoVision_ML_DL_Data_Report.md](GeoVision_ML_DL_Data_Report.md)** -- audit trail of the data/model investigation and the fixes made.
+- `usermanual.md`, `caching.md`, `challenges.md`, `changelog.md`, `project_summary.md` -- written for an earlier version of the project (marked OUTDATED at the top); kept for history.
 
 ## Environmental Health Index
 
@@ -144,7 +115,7 @@ EHI = 0.30 · air_quality + 0.25 · vegetation + 0.25 · water + 0.20 · climate
 ```
 
 Each sub-index is rescaled to 0 (poor) - 100 (excellent) from its raw
-variables (PM2.5/NO2, NDVI, NDWI, precipitation/temperature) before
+variables (PM2.5/NO2, NDVI, root-zone soil moisture, 30-day rainfall/temperature) before
 weighting -- see `geovision/index/health_index.py` for the exact bounds,
 which you should tune against ground truth for your deployment regions.
 Weights live in `Settings.ehi_weights` (`geovision/config.py`).
@@ -154,7 +125,7 @@ Weights live in `Settings.ehi_weights` (`geovision/config.py`).
 - **New region**: add an entry to `REGION_REGISTRY` in `geovision/config.py`
   (bbox, centroid, level).
 - **New data source**: implement `BaseIngestionClient`, register it in
-  `IngestionPipeline`, add its variables to `SOURCE_GROUPS`.
+  `IngestionPipeline._clients` (it must return `Observation`s for the core variables).
 - **New model architecture**: for forecasting, add a class to
   `forecasting.py` implementing `forward(x) -> (batch, horizon)` and wire
   it into `_make_model`; for classification, extend
@@ -163,15 +134,13 @@ Weights live in `Settings.ehi_weights` (`geovision/config.py`).
   `classifiers.py` (currently a literature-informed proxy rule) for actual
   labeled data once available.
 
-## Limitations of this build
+## Limitations
 
-- No live credentials are wired into this environment, so every number
-  you see (EHI values, alerts, model metrics) is generated from the
-  seeded synthetic client, not real satellite/climate data. The
-  ingestion/preprocessing/feature/model/index/alert *code paths* are real
-  and unit-tested; only the upstream data is simulated.
-- The classifiers train against a rule-based proxy label
-  (`derive_condition_labels`), not field-verified ground truth -- replace
-  it before trusting the classification metrics for anything real.
-- `/api/train` is synchronous; fine for a demo, not for a production
-  near-real-time SLA -- see the API section above.
+- Regional values are a mean over a handful of land sample points (not every pixel); coarse for continents.
+- MODIS NDVI is published with ~1-2 months lag; the newest weeks are carried forward, and
+  the series is piecewise-linear between 16-day composites.
+- PM2.5/NO2 are CAMS model reanalysis, not ground-station measurements.
+- The classifiers predict a rule-derived condition label one week ahead (not field-verified ground truth).
+- Forecasters are univariate and trained per request on ~2 years of daily data; the dashboard shows a
+  naive (repeat-last-value) baseline next to every model -- for NDVI the naive forecast wins.
+- `/api/train` is synchronous and retrains on every uncached request.

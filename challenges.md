@@ -1,3 +1,5 @@
+> **OUTDATED (2026-10-01):** this document was written for an earlier version of the project (Planetary Computer / ERA5 / OpenAQ / CHIRPS data, single-point sampling, per-region models). The data sources, preprocessing, models and results have since changed. For the current, accurate description read **`GeoVision_Project_Technical_Report.md`**.
+
 # Engineering Challenges & Solutions — GeoVision AI
 
 This document details the issues encountered, architectural and rendering challenges faced, and the engineering solutions implemented during the development and stabilization of the GeoVision AI platform and its real-time data pipeline.

@@ -13,7 +13,7 @@ def get_alerts(
     region_ids: str | None = Query(
         None, description="Comma-separated region ids; omit for all regions"
     ),
-    days: int = Query(90, ge=14, le=365),
+    days: int = Query(180, ge=14, le=365),
 ):
     ids = None
     if region_ids:

@@ -74,7 +74,7 @@ def clear_all_caches() -> int:
     count = len(_CACHE)
     _CACHE.clear()
     if CACHE_DIR.exists():
-        for p in CACHE_DIR.glob("*.pkl"):
+        for p in [*CACHE_DIR.glob("*.pkl"), *(CACHE_DIR / "http").glob("*.json")]:  # results + raw API responses
             try:
                 p.unlink()
                 count += 1
@@ -170,7 +170,7 @@ def alerts_for(region_ids: list[str] | None = None, days: int = 90) -> list[dict
     ]
 
 
-def training_report(region_id: str, days: int = 240, horizon: int | None = None,
+def training_report(region_id: str, days: int = 730, horizon: int | None = None,
                      epochs: int = 40) -> dict:
     """Runs Stage 4/5 (parallel ML/DL training + validation) for one
     region. Uses a longer default history than the EHI series endpoints

@@ -17,7 +17,7 @@ from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 
 CORE_VARIABLES = [
-    "ndvi", "ndwi", "temperature_2m", "precipitation_total", "pm25", "no2",
+    "ndvi", "soil_moisture", "temperature_2m", "precipitation_total", "pm25", "no2",
 ]
 ROLLING_WINDOWS = (7, 30)
 

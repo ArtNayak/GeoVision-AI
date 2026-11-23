@@ -1,12 +1,11 @@
 """
-Cloud-masking and quality-flag handling.
+Quality handling: physical-range validation and gap-filling.
 
-Optical satellite variables (NDVI, NDWI, LST) are frequently masked or
-degraded by cloud cover. `PlanetaryComputerClient` already filters scenes
-above a cloud threshold at search time (see COLLECTIONS[...]["cloud_max"]
-in planetary_computer_client.py), but gaps still occur on persistently
-cloudy days/regions. This module flags and fills those gaps in the tidy
-observation DataFrame before feature engineering.
+Readings outside physically valid ranges are set to missing, then every
+(region, source, variable) series is resampled to a daily grid and interpolated
+(16-day MODIS composites become daily values; the most recent weeks carry the last
+value forward). Cloud screening itself happens in the MODIS client, which keeps only
+clear-pixel composites (pixel-reliability flag).
 """
 from __future__ import annotations
 
@@ -16,7 +15,7 @@ import pandas as pd
 # Physically valid ranges used to flag corrupted / sensor-error readings.
 VALID_RANGES: dict[str, tuple[float, float]] = {
     "ndvi": (-1.0, 1.0),
-    "ndwi": (-1.0, 1.0),
+    "soil_moisture": (0.0, 1.0),  # m3/m3
     "temperature_2m": (200.0, 330.0),   # Kelvin
     "precipitation_total": (0.0, 500.0),  # mm/window
     "pm25": (0.0, 1000.0),

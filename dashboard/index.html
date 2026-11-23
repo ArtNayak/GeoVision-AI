@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@500;700;900&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link rel="icon" href="data:," />
 <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -15,10 +16,10 @@
   <header class="hero">
     <div class="hero-copy">
       <span class="eyebrow">GeoVision AI · near real-time environmental intelligence</span>
-      <h1>Reading Earth's vital signs<br /><span class="accent">from orbit, every day.</span></h1>
+      <h1>Reading Earth's vital signs<br /><span class="accent">from real data, every day.</span></h1>
       <p class="lede">
-        A single composite Environmental Health Index fused from satellite spectral indices,
-        climate reanalysis, precipitation and ground-level air quality — scored, forecast
+        A single composite Environmental Health Index fused from satellite vegetation (MODIS NDVI),
+        ERA5 climate reanalysis, precipitation, soil moisture and CAMS air quality — scored, forecast
         and compared across every region on the map.
       </p>
       <div class="hero-meta">
@@ -66,6 +67,7 @@
         <select id="regionSelect" aria-label="Select region"></select>
       </div>
       <div class="region-bandstack" id="regionBandstack"></div>
+      <p class="region-note" id="regionNote"></p>
       <div class="chart-wrap">
         <canvas id="ehiChart" height="260"></canvas>
         <div class="chart-tooltip" id="chartTooltip" hidden></div>
@@ -79,14 +81,15 @@
           <span class="panel-kicker">03 — stage 4/5 · parallel training &amp; validation</span>
           <h2>Model comparison — <span id="trainRegionName">—</span></h2>
         </div>
+        <span class="alert-count" id="trainMeta">—</span>
       </div>
       <div class="model-grid">
         <div class="model-block">
-          <h3>Classification — condition class (RF vs XGBoost)</h3>
+          <h3>Classification — condition 7 days ahead (RF vs XGBoost)</h3>
           <div id="classificationCards" class="model-cards"></div>
         </div>
         <div class="model-block">
-          <h3>Forecasting — CNN / LSTM / Transformer</h3>
+          <h3>Forecasting — next 14 days (LSTM / CNN / Transformer / Ensemble)</h3>
           <div id="forecastTabs" class="forecast-tabs" role="tablist"></div>
           <div class="chart-wrap chart-wrap-sm">
             <canvas id="forecastChart" height="200"></canvas>
@@ -122,7 +125,7 @@
   </main>
 
   <footer>
-    <span>GeoVision AI · sources: GEE (Sentinel-2 / Landsat-8&#8209;9 / MODIS), ERA5, CHIRPS, OpenAQ</span>
+    <span>GeoVision AI · sources: Open-Meteo (ERA5, ERA5-Land, CAMS), NASA MODIS NDVI</span>
     <span class="footer-sep">·</span>
     <span>Environmental Health Index = 0.30 air + 0.25 vegetation + 0.25 water + 0.20 climate</span>
   </footer>

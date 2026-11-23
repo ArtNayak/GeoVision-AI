@@ -1,10 +1,4 @@
-"""
-Central configuration for GeoVision AI.
-
-All credentials are read from environment variables so nothing secret is
-ever hard-coded. See README.md for the full list of variables and how to
-obtain each credential.
-"""
+"""Central configuration for GeoVision AI (no API keys needed: all data sources are free)."""
 from __future__ import annotations
 
 import os
@@ -18,32 +12,9 @@ CACHE_DIR = DATA_DIR / "cache"
 
 
 @dataclass(frozen=True)
-class Credentials:
-    """External service credentials, all optional at import time so the
-    package can be explored/tested without any keys configured."""
-
-    # Microsoft Planetary Computer: the STAC catalog and its data are
-    # public, so this is optional -- it only raises your request-rate
-    # limit. Get a free one at
-    # https://planetarycomputer.microsoft.com/account/request
-    pc_subscription_key: str | None = field(
-        default_factory=lambda: os.getenv("PC_SDK_SUBSCRIPTION_KEY")
-    )
-    cds_api_key: str | None = field(
-        default_factory=lambda: os.getenv("CDS_API_KEY")  # ERA5 (Copernicus CDS)
-    )
-    openaq_api_key: str | None = field(
-        default_factory=lambda: os.getenv("OPENAQ_API_KEY")
-    )
-
-
-@dataclass(frozen=True)
 class Settings:
     # Ingestion cadence
     ingestion_interval_minutes: int = int(os.getenv("INGESTION_INTERVAL_MIN", "60"))
-
-    # Spatial resolution used for zonal-mean reductions over each region, in metres
-    default_scale_m: int = int(os.getenv("DEFAULT_SCALE_M", "250"))
 
     # Forecast horizon (days) produced by the LSTM / Transformer models
     forecast_horizon_days: int = int(os.getenv("FORECAST_HORIZON_DAYS", "14"))
@@ -68,8 +39,6 @@ class Settings:
             "composite": 45.0,
         }
     )
-
-    credentials: Credentials = field(default_factory=Credentials)
 
 
 settings = Settings()

@@ -8,9 +8,8 @@ platform. This package implements the 5-layer system architecture and the
 
 Architecture layers
 --------------------
-1. Data-source layer      -> geovision.ingestion (Landsat/Sentinel/MODIS via
-                              Microsoft Planetary Computer, ERA5, NASA POWER
-                              precipitation, OpenAQ)
+1. Data-source layer      -> geovision.ingestion (Open-Meteo: ERA5/ERA5-Land/CAMS
+                              weather, soil moisture, air quality; NASA MODIS NDVI)
 2. Ingestion/processing    -> geovision.ingestion.pipeline, geovision.preprocessing
 3. ML/DL analytics engine  -> geovision.features, geovision.models, geovision.index
 4. Application-services    -> geovision.alerting, geovision.index (comparisons)
@@ -19,8 +18,8 @@ Architecture layers
 Methodology stages (see docs/report)
 -------------------------------------
 (1) near real-time ingestion -> ingestion/*
-(2) preprocessing (cloud masking, correction) -> preprocessing/*
-(3) feature engineering (spectral indices, PCA, normalization) -> features/*
+(2) preprocessing (range validation, gap-fill) -> preprocessing/*
+(3) feature engineering (rolling stats, anomalies, PCA) -> features/*
 (4) parallel ML/DL training -> models/classifiers.py, models/forecasting.py
 (5) validation -> models/evaluate.py
 (6) fusion into Environmental Health Index -> index/health_index.py

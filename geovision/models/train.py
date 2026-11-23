@@ -9,12 +9,32 @@ from __future__ import annotations
 from dataclasses import asdict
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
-from geovision.models.classifiers import train_and_compare
-from geovision.models.forecasting import train_and_compare_forecasters
+from geovision.models.classifiers import train_and_compare, train_and_compare_pooled as pooled_classifiers
+from geovision.models.forecasting import train_and_compare_forecasters, train_and_compare_pooled as pooled_forecasters
 
-FORECAST_VARIABLES = ["pm25", "ndvi", "precipitation_total"]
+# Per-variable forecaster setup, chosen by a 13-region backtest (report section 11):
+# variable -> (use other variables + season as extra inputs, residual learning)
+FORECAST_CONFIG = {
+    "pm25": (False, False),
+    "precipitation_total": (False, False),
+    "temperature_2m": (False, False),
+    "soil_moisture": (False, True),
+    "ndvi": (True, True),   # slow 16-day composite signal: only beats naive with weather/season context
+}
+EXOG = ["ndvi", "soil_moisture", "temperature_2m", "precipitation_total", "pm25", "no2"]
+
+
+def forecast_matrix(features: pd.DataFrame, variable: str, exog: bool) -> np.ndarray:
+    """(n, F) array, forecast target in column 0; optionally + other variables + day-of-year sin/cos."""
+    f = features.sort_values("date")
+    d = f[[variable] + ([c for c in EXOG if c != variable and c in f] if exog else [])].copy()
+    if exog:
+        doy = pd.to_datetime(f["date"]).dt.dayofyear.to_numpy()
+        d["season_sin"], d["season_cos"] = np.sin(2 * np.pi * doy / 365.25), np.cos(2 * np.pi * doy / 365.25)
+    return d.ffill().bfill().to_numpy(dtype=np.float32)
 
 
 def run_training(features: pd.DataFrame, forecast_horizon: int = 14,
@@ -35,15 +55,15 @@ def run_training(features: pd.DataFrame, forecast_horizon: int = 14,
         }
 
     # -- Stage 4/5: deep-learning forecasters ------------------------------
-    for variable in FORECAST_VARIABLES:
+    for variable, (exog, residual) in FORECAST_CONFIG.items():
         if variable not in features.columns:
             continue
-        series = features.sort_values("date")[variable].dropna().to_numpy()
+        series = forecast_matrix(features, variable, exog)
         if len(series) < 60:
             continue  # not enough history for a meaningful lookback window
         try:
             forecaster_results = train_and_compare_forecasters(
-                series, horizon=forecast_horizon, epochs=epochs
+                series, horizon=forecast_horizon, epochs=epochs, residual=residual
             )
         except (ValueError, ImportError):
             # ValueError: not enough data for lookback/horizon window
@@ -58,6 +78,38 @@ def run_training(features: pd.DataFrame, forecast_horizon: int = 14,
         }
 
     return report
+
+
+def _classification_entry(result) -> dict[str, Any]:
+    return {"metrics": result.metrics.to_dict(),
+            "top_features": dict(list(result.feature_importances.items())[:5])}
+
+
+def _forecast_entry(result) -> dict[str, Any]:
+    return {"metrics": result.metrics.to_dict(), "forecast": result.forecast.tolist()}
+
+
+def run_pooled_training(features_by_region: dict[str, pd.DataFrame], forecast_horizon: int = 14,
+                        epochs: int = 30) -> dict[str, dict[str, Any]]:
+    """Pooled training: ONE classifier per type and ONE network per (variable, architecture, seed),
+    each trained on the training windows of ALL regions (about 13x the data of per-region models),
+    then evaluated per region on that region's own untouched chronological hold-out.
+    Returns {region_id: report} with the same shape as `run_training`."""
+    reports: dict[str, dict[str, Any]] = {rid: {"classification": {}, "forecasting": {}} for rid in features_by_region}
+
+    for rid, by_model in pooled_classifiers(features_by_region).items():
+        for mt, result in by_model.items():
+            reports[rid]["classification"][mt] = _classification_entry(result)
+
+    for variable, (exog, residual) in FORECAST_CONFIG.items():
+        series = {rid: forecast_matrix(f, variable, exog) for rid, f in features_by_region.items()
+                  if variable in f.columns and len(f) >= 60}
+        if not series:
+            continue
+        for rid, by_arch in pooled_forecasters(series, horizon=forecast_horizon, epochs=epochs,
+                                               residual=residual).items():
+            reports[rid]["forecasting"][variable] = {a: _forecast_entry(r) for a, r in by_arch.items()}
+    return reports
 
 
 def best_model_summary(report: dict[str, Any]) -> dict[str, str]:

@@ -1,3 +1,5 @@
+> **OUTDATED (2026-10-01):** this document was written for an earlier version of the project (Planetary Computer / ERA5 / OpenAQ / CHIRPS data, single-point sampling, per-region models). The data sources, preprocessing, models and results have since changed. For the current, accurate description read **`GeoVision_Project_Technical_Report.md`**.
+
 # User Manual — GeoVision AI Environmental Intelligence Platform
 
 Welcome to the **GeoVision AI User Manual**. This document guides you through running the platform, understanding the architecture, operating the interactive dashboard, and interpreting the deep learning & machine learning graphs and metrics.

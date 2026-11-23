@@ -11,7 +11,7 @@ router = APIRouter(prefix="/api", tags=["models"])
 @router.get("/train")
 def get_training_report(
     region_id: str = Query(..., description="Region id, e.g. IN, MUM-IN"),
-    days: int = Query(240, ge=90, le=730),
+    days: int = Query(730, ge=90, le=1000),
     horizon: int = Query(settings.forecast_horizon_days, ge=3, le=60),
     epochs: int = Query(40, ge=3, le=200),
 ):

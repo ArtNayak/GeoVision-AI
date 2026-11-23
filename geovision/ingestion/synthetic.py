@@ -1,18 +1,8 @@
 """
-Synthetic observation generator.
+Synthetic observation generator -- TEST FIXTURE ONLY (not used by the pipeline).
 
-The live clients (Planetary Computer, ERA5, NASA POWER, OpenAQ) either
-require credentials or outbound network access that this sandboxed
-environment does not have. This module produces physically-plausible,
-seeded-random daily observations for every variable those clients would
-otherwise return, so the rest of the platform (preprocessing -> features
--> models -> index -> API -> dashboard) can be built, tested, and demoed
-end-to-end without live credentials or network access.
-
-Swap this out for the real clients in `geovision.ingestion.pipeline`
-automatically once `pystac-client`/`planetary-computer`/`rioxarray` are
-installed and/or CDS_API_KEY / OPENAQ_API_KEY are configured -- the
-`Observation` contract is identical either way.
+Seeded, physically-plausible daily observations for every core variable, used only by
+unit tests that must run offline. The pipeline never falls back to this generator.
 """
 from __future__ import annotations
 
@@ -64,26 +54,26 @@ class SyntheticClient(BaseIngestionClient):
                 ((seed >> (k % 24)) % 1000) / 1000.0 - 0.5
             ) * 2 * scale
 
-            # -- vegetation (GEE: sentinel2/landsat8/modis NDVI) --
+            # -- vegetation (NDVI) --
             ndvi_base = 0.55 if tropical else 0.40
             ndvi = max(0.0, min(0.95, _seasonal(doy, 0.3, 0.12, ndvi_base) + noise(i) * 0.03))
             observations.append(Observation(region_id, d, "sentinel2", "ndvi", ndvi, "index"))
 
-            # -- water (GEE: sentinel2 NDWI) --
-            ndwi_base = 0.10 if tropical else -0.05
-            ndwi = max(-0.6, min(0.6, _seasonal(doy, 1.8, 0.10, ndwi_base) + noise(i + 1) * 0.04))
-            observations.append(Observation(region_id, d, "sentinel2", "ndwi", ndwi, "index"))
+            # -- water (soil moisture) --
+            sm_base = 0.30 if tropical else 0.22
+            sm = max(0.02, min(0.5, _seasonal(doy, 1.8, 0.08, sm_base) + noise(i + 1) * 0.02))
+            observations.append(Observation(region_id, d, "sentinel2", "soil_moisture", sm, "m3/m3"))
 
             # -- climate: temperature (ERA5) --
             temp_base = 300 if tropical else 288  # Kelvin
             temp = _seasonal(doy, math.pi if lat < 0 else 0, 8, temp_base) + noise(i + 2, 1.5)
             observations.append(Observation(region_id, d, "era5", "temperature_2m", temp, "K"))
 
-            # -- climate: precipitation (CHIRPS) --
+            # -- climate: precipitation --
             precip = max(0.0, _seasonal(doy, 2.5, 6, 4 - arid_bias * 3) + noise(i + 3, 3))
             observations.append(Observation(region_id, d, "chirps", "precipitation_total", precip, "mm"))
 
-            # -- air quality: PM2.5 (OpenAQ) --
+            # -- air quality: PM2.5 --
             pm25_base = 55 if region_id in {"IN", "MH-IN", "MUM-IN", "ID"} else 18
             pm25 = max(2.0, _seasonal(doy, 4.0, 15, pm25_base) + noise(i + 4, 6))
             observations.append(Observation(region_id, d, "openaq", "pm25", pm25, "µg/m³"))

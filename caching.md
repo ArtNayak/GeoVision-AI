@@ -1,3 +1,5 @@
+> **OUTDATED (2026-10-01):** this document was written for an earlier version of the project (Planetary Computer / ERA5 / OpenAQ / CHIRPS data, single-point sampling, per-region models). The data sources, preprocessing, models and results have since changed. For the current, accurate description read **`GeoVision_Project_Technical_Report.md`**.
+
 # Caching Architecture & Implementation Guide — GeoVision AI
 
 This document provides a comprehensive technical guide to the **Two-Tier Caching System** in GeoVision AI. It explains why caching is necessary for planetary-scale satellite data, how in-memory and persistent disk caches work, how cache keys are structured, how edge cases (like DataFrame truthiness and JSON NaN compliance) are handled, and how to operate and monitor the cache via APIs and interactive web dashboards.

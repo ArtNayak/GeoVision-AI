@@ -18,7 +18,7 @@ regions = requests.get(f"{BASE}/api/regions", timeout=5).json()
 print(f"Regions registered: {len(regions)}\n")
 
 # EHI — Mumbai (small bbox → fast COG windowed read)
-print("Fetching EHI for Mumbai (live Planetary Computer + NASA POWER, 15 days)...")
+print("Fetching EHI for Mumbai (live Open-Meteo + MODIS, 15 days)...")
 t0 = time.time()
 r = requests.get(f"{BASE}/api/ehi", params={"region_id": "MUM-IN", "days": 15}, timeout=180)
 elapsed = time.time() - t0

@@ -1,3 +1,5 @@
+> **OUTDATED (2026-10-01):** this document was written for an earlier version of the project (Planetary Computer / ERA5 / OpenAQ / CHIRPS data, single-point sampling, per-region models). The data sources, preprocessing, models and results have since changed. For the current, accurate description read **`GeoVision_Project_Technical_Report.md`**.
+
 # GeoVision AI — Changes & Improvements Log
 
 > A full record of every modification made from the base code to the current state of the platform, grouped by category.

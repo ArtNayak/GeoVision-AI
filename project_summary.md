@@ -1,3 +1,5 @@
+> **OUTDATED (2026-10-01):** this document was written for an earlier version of the project (Planetary Computer / ERA5 / OpenAQ / CHIRPS data, single-point sampling, per-region models). The data sources, preprocessing, models and results have since changed. For the current, accurate description read **`GeoVision_Project_Technical_Report.md`**.
+
 # GeoVision AI — Complete Project Summary
 
 > **Global near real-time environmental intelligence and forecasting platform**

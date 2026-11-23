@@ -14,14 +14,9 @@ fastapi>=0.110
 uvicorn[standard]>=0.29
 python-multipart>=0.0.9
 
-# Live data-source clients (optional -- the platform runs on synthetic
-# data without these; install what you need for live ingestion)
-pystac-client>=0.8           # Query the Planetary Computer STAC catalog
-planetary-computer>=1.0      # Sign Planetary Computer asset URLs
-rioxarray>=0.15               # Read/clip Cloud-Optimized GeoTIFFs (Sentinel-2/Landsat/MODIS)
-odc-stac>=0.3                  # STAC -> xarray convenience layer
-cdsapi>=0.7                     # ERA5 via Copernicus Climate Data Store
-requests>=2.31                   # OpenAQ + NASA POWER REST clients
+# Data sources (Open-Meteo, NASA ORNL MODIS) are plain REST APIs, no keys needed
+requests>=2.31
 
-# Testing
+# Testing (httpx is needed by FastAPI's TestClient)
 pytest>=8.0
+httpx>=0.27

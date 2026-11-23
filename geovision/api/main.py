@@ -583,7 +583,7 @@ async def startup_warmup():
     server restarts, so /api/regions/status and the dashboard load
     instantly from disk on the first request.
 
-    To manually trigger a full re-ingestion from Planetary Computer, call:
+    To force a full re-ingestion from the live data sources, call:
         POST /api/cache/clear
     which flushes memory+disk and the next request per region will re-fetch.
     """

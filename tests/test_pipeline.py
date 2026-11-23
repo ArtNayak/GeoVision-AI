@@ -20,11 +20,11 @@ def raw_observations():
 
 
 def test_synthetic_client_covers_all_core_variables(raw_observations):
-    expected = {"ndvi", "ndwi", "temperature_2m", "precipitation_total", "pm25", "no2"}
+    expected = {"ndvi", "soil_moisture", "temperature_2m", "precipitation_total", "pm25", "no2"}
     assert expected.issubset(set(raw_observations["variable"].unique()))
 
 
-def test_pipeline_combines_sources_with_synthetic_fallback():
+def test_pipeline_fetches_real_sources():
     pipeline = IngestionPipeline()
     end = date.today()
     start = end - timedelta(days=30)
@@ -90,3 +90,13 @@ def test_compare_regions_ranks_by_ehi_desc():
         frames[region] = compute_ehi(features)
     table = compare_regions(frames)
     assert list(table["region_id"]) == list(table.sort_values("ehi", ascending=False)["region_id"])
+
+
+def test_sample_points_are_inside_the_region_bbox():
+    from geovision.config import REGION_REGISTRY
+    from geovision.ingestion.base import sample_points
+    for region in REGION_REGISTRY.values():
+        pts = sample_points(region)
+        assert len(pts) == 5 and pts[0] == (region["lat"], region["lon"])
+        x0, y0, x1, y1 = region["bbox"]
+        assert all(y0 <= la <= y1 and x0 <= lo <= x1 for la, lo in pts[1:])

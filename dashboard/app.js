@@ -23,12 +23,14 @@ const BAND_LABEL = {
   climate: "Climate",
   ehi: "Composite EHI",
 };
-const ARCH_COLOR = { lstm: "#4FB7C9", cnn: "#E2765B", transformer: "#8C8FE0" };
-const ARCH_LABEL = { lstm: "LSTM", cnn: "CNN", transformer: "Transformer" };
+const ARCH_COLOR = { lstm: "#4FB7C9", cnn: "#E2765B", transformer: "#8C8FE0", ensemble: "#E7B84C" };
+const ARCH_LABEL = { lstm: "LSTM", cnn: "CNN", transformer: "Transformer", ensemble: "Ensemble" };
 const VARIABLE_LABEL = {
   pm25: "PM2.5 (µg/m³)",
   ndvi: "NDVI (index)",
   precipitation_total: "Precipitation (mm)",
+  temperature_2m: "Temperature (K)",
+  soil_moisture: "Soil moisture (m³/m³)",
 };
 
 const state = {
@@ -88,26 +90,16 @@ async function tryLoadLiveCore() {
 
   const compareIds = successfulIds.length > 0 ? successfulIds : ids;
   const compareJson = await fetchJSON(`/api/compare?region_ids=${compareIds.join(",")}&days=180`, { timeoutMs: 30000 });
-  const alertsJson = await fetchJSON("/api/alerts?days=90", { timeoutMs: 30000 });
+  const alertsJson = await fetchJSON("/api/alerts?days=180", { timeoutMs: 30000 });
 
   return {
-    generated_at: new Date().toISOString().slice(0, 10),
+    generated_at: new Date().toLocaleDateString("en-CA"),
     regions: regions.filter((r) => successfulIds.length === 0 || successfulIds.includes(r.region_id)),
     ehi_series,
     comparison: compareJson.table || [],
     alerts: alertsJson.alerts || [],
     mode: "live",
   };
-}
-
-async function loadLiveTraining(preferredRegionId) {
-  const ids = state.data.regions.map((r) => r.region_id);
-  const trainRegion = ids.includes(preferredRegionId) ? preferredRegionId : ids[0];
-  const trainJson = await fetchJSON(
-    `/api/train?region_id=${trainRegion}&days=240&horizon=14&epochs=25`,
-    { timeoutMs: 120000 }
-  );
-  return { region_id: trainJson.region_id, report: trainJson.report };
 }
 
 async function loadDemoData() {
@@ -231,8 +223,8 @@ function createLineChart(canvas, tooltipEl) {
 
     // x labels: first / middle / last
     const xIdxs = n > 1 ? [0, Math.floor((n - 1) / 2), n - 1] : [0];
-    ctx.textAlign = "center";
     xIdxs.forEach((i) => {
+      ctx.textAlign = n === 1 ? "center" : i === 0 ? "left" : i === n - 1 ? "right" : "center";
       ctx.fillText(current.labels[i], xAt(i), L.top + plotH + 18);
     });
     ctx.textAlign = "left";
@@ -444,6 +436,11 @@ function renderRegionDetail(regionId) {
     })
     .join("");
 
+  const asof = meta.ndvi_asof;
+  document.getElementById("regionNote").textContent =
+    `Data through ${latest ? latest.date : "—"}: temperature, rainfall, soil moisture (ERA5/live) and PM2.5 (CAMS) are daily means over land sample points inside the region. ` +
+    `Vegetation = MODIS NDVI (5 km windows at up to 5 land points, clear pixels only), latest usable composite ${asof || "n/a"} (published with a 1–2 month lag and dropped when cloudy, so newer days carry that value forward).`;
+
   const chartData = {
     labels: series.map((r) => r.date),
     series: [
@@ -465,35 +462,23 @@ function selectRegion(regionId) {
   if (!regionId || !state.data.ehi_series[regionId]) return;
   state.currentRegion = regionId;
   renderRegionDetail(regionId);
+  renderModelComparison(regionId);
 }
 
 /* -- model comparison ---------------------------------------------------- */
 
 let forecastChart;
 
-function renderModelsLoading() {
-  document.getElementById("classificationCards").innerHTML =
-    `<div class="alert-empty loading-dots">Training Random Forest &amp; XGBoost classifiers</div>`;
-  document.getElementById("forecastTabs").innerHTML = "";
-  document.getElementById("forecastMetrics").innerHTML =
-    `<div class="alert-empty loading-dots">Training CNN, LSTM &amp; Transformer forecasters — this runs live and can take up to a minute</div>`;
-  const fl = document.getElementById("forecastLegend"); if (fl) fl.innerHTML = "";
-  forecastChart.render({ labels: [], series: [] });
-}
-
-function renderModelsError() {
-  document.getElementById("classificationCards").innerHTML =
-    `<div class="alert-empty">Model training failed or timed out. The rest of the dashboard is unaffected.</div>`;
-  document.getElementById("forecastTabs").innerHTML = "";
-  document.getElementById("forecastMetrics").innerHTML = "";
-  const fl = document.getElementById("forecastLegend"); if (fl) fl.innerHTML = "";
-}
-
-function renderModelComparison() {
-  const report = (state.data.training && state.data.training.report) || {};
-  const trainRegionId = state.data.training && state.data.training.region_id;
+function renderModelComparison(regionId) {
+  // Training results are precomputed for every region by scripts/run_demo.py (GPU, real data)
+  const entry = (state.data.training_by_region || {})[regionId];
+  const report = (entry && entry.report) || {};
   document.getElementById("trainRegionName").textContent =
-    (state.regionMeta[trainRegionId] || {}).name || trainRegionId || "—";
+    (state.regionMeta[regionId] || {}).name || regionId || "—";
+  const meta = state.data.training_meta;
+  document.getElementById("trainMeta").textContent = meta
+    ? `${meta.device.toUpperCase()} · ${meta.mode || "per-region"} model across regions${meta.seeds ? ` (${meta.seeds} seeds)` : ""} · ${meta.train_days}d · ${meta.epochs} epochs · trained ${meta.trained_on}`
+    : "—";
 
   renderClassification(report.classification || {});
   renderForecastTabs(report.forecasting || {});
@@ -531,7 +516,14 @@ function renderClassification(classification) {
             <span class="metric"><span class="metric-val">${(m.accuracy * 100).toFixed(1)}%</span><span class="metric-label">Accuracy</span></span>
             <span class="metric"><span class="metric-val">${fmt2(m.kappa)}</span><span class="metric-label">Kappa</span></span>
             <span class="metric"><span class="metric-val">${m.roc_auc != null ? fmt2(m.roc_auc) : "—"}</span><span class="metric-label">ROC-AUC</span></span>
+            <span class="metric"><span class="metric-val">${m.baseline_accuracy != null ? (m.baseline_accuracy * 100).toFixed(1) + "%" : "—"}</span><span class="metric-label">Naive acc.</span></span>
           </div>
+          ${(() => {
+            const d = m.baseline_accuracy != null ? (m.accuracy - m.baseline_accuracy) * 100 : null;
+            if (d == null) return "";
+            if (Math.abs(d) < 0.05) return `<div class="verdict">on par with the naive predictor</div>`;
+            return `<div class="verdict ${d > 0 ? "win" : "lose"}">${d > 0 ? "beats" : "below"} naive predictor by ${Math.abs(d).toFixed(1)} pts</div>`;
+          })()}
           <div class="feature-bars">${featureRows}</div>
         </div>`;
     })
@@ -566,6 +558,50 @@ function renderForecastTabs(forecasting) {
   renderForecastDetail(forecasting[state.forecastVariable]);
 }
 
+/* Live provider forecast (Open-Meteo NWP/CAMS, fetched in the browser) drawn next to our models */
+const _providerCache = {};
+async function providerForecast(regionId, variable) {
+  const r = state.regionMeta[regionId];
+  if (!r || r.lat == null) return null;
+  const key = `${regionId}:${variable}`;
+  if (_providerCache[key] !== undefined) return _providerCache[key];
+  const q = `latitude=${r.lat}&longitude=${r.lon}&timezone=UTC&past_days=7&forecast_days=16`;
+  let byDate = {};
+  try {
+    if (variable === "pm25") {
+      const j = await fetchJSON(`https://air-quality-api.open-meteo.com/v1/air-quality?${q.replace("forecast_days=16", "forecast_days=5")}&hourly=pm2_5`, { timeoutMs: 8000 });
+      const acc = {};
+      j.hourly.time.forEach((t, i) => { const v = j.hourly.pm2_5[i]; if (v != null) (acc[t.slice(0, 10)] ||= []).push(v); });
+      Object.entries(acc).forEach(([d, a]) => { byDate[d] = a.reduce((x, y) => x + y, 0) / a.length; });
+    } else if (variable === "precipitation_total" || variable === "temperature_2m") {
+      const f = variable === "precipitation_total" ? "precipitation_sum" : "temperature_2m_mean";
+      const j = await fetchJSON(`https://api.open-meteo.com/v1/forecast?${q}&daily=${f}`, { timeoutMs: 8000 });
+      j.daily.time.forEach((d, i) => { const v = j.daily[f][i]; if (v != null) byDate[d] = variable === "temperature_2m" ? v + 273.15 : v; });
+    } else {
+      return (_providerCache[key] = null);
+    }
+  } catch (e) {
+    return null; // offline / blocked: just no overlay
+  }
+  return (_providerCache[key] = byDate);
+}
+
+async function addProviderOverlay(regionId, variable, labels, chartSeries) {
+  const byDate = await providerForecast(regionId, variable);
+  if (!byDate || regionId !== state.currentRegion || variable !== state.forecastVariable) return;
+  const base = new Date((state.data.training_meta || {}).trained_on + "T00:00:00Z");
+  if (isNaN(base)) return;
+  const values = labels.map((_, i) => {
+    const d = new Date(base.getTime() + (i + 1) * 86400000).toISOString().slice(0, 10);
+    return byDate[d] ?? null;
+  });
+  if (values.every((v) => v == null)) return;
+  const all = [...chartSeries, { key: "provider", label: "Open-Meteo live forecast", color: "#F4F1E8", width: 2.2, dashed: false, values }];
+  forecastChart.render({ labels, series: all });
+  const legendEl = document.getElementById("forecastLegend");
+  if (legendEl) legendEl.innerHTML += `<span class="legend-item"><span class="legend-dot" style="background:#F4F1E8"></span>Open-Meteo live forecast (${values.filter((v) => v != null).length}d)</span>`;
+}
+
 function renderForecastDetail(archResults) {
   const archs = Object.keys(archResults || {});
   if (!archs.length) {
@@ -587,6 +623,7 @@ function renderForecastDetail(archResults) {
   }));
 
   forecastChart.render({ labels, series: chartSeries });
+  addProviderOverlay(state.currentRegion, state.forecastVariable, labels, chartSeries);
 
   // Populate the forecast chart legend
   const legendEl = document.getElementById("forecastLegend");
@@ -606,7 +643,14 @@ function renderForecastDetail(archResults) {
             <span class="metric"><span class="metric-val">${fmt2(m.rmse)}</span><span class="metric-label">RMSE</span></span>
             <span class="metric"><span class="metric-val">${fmt2(m.mae)}</span><span class="metric-label">MAE</span></span>
             <span class="metric"><span class="metric-val">${fmt2(m.r2)}</span><span class="metric-label">R²</span></span>
+            <span class="metric"><span class="metric-val">${fmt2(m.baseline_rmse)}</span><span class="metric-label">Naive RMSE</span></span>
+            <span class="metric"><span class="metric-val">${m.shrink != null ? fmt2(m.shrink) : "—"}</span><span class="metric-label">Model weight</span></span>
           </div>
+          ${(() => {
+            if (m.baseline_rmse == null || !m.baseline_rmse) return "";
+            const imp = (1 - m.rmse / m.baseline_rmse) * 100;
+            return `<div class="verdict ${imp > 0 ? "win" : "lose"}">${imp > 0 ? "" : "−"}${Math.abs(imp).toFixed(0)}% ${imp > 0 ? "better" : "worse"} than naive</div>`;
+          })()}
         </div>`;
     })
     .join("");
@@ -641,11 +685,11 @@ function renderAlerts() {
 /* -- pipeline strip (authored, static content describing the methodology) - */
 
 const PIPELINE_STEPS = [
-  { title: "Near real-time ingestion", desc: "GEE (Sentinel-2, Landsat-8/9, MODIS), ERA5, CHIRPS and OpenAQ pulled per region on a scheduled interval." },
-  { title: "Preprocessing", desc: "Cloud masking, physical-range validation and gap-fill interpolation clean every time series before use." },
-  { title: "Feature engineering", desc: "Spectral indices, 7/30-day rolling statistics, anomaly scores and PCA compression build the model-ready matrix." },
-  { title: "Parallel ML/DL training", desc: "Random Forest and XGBoost classifiers; CNN, LSTM and Transformer forecasters trained side-by-side." },
-  { title: "Validation", desc: "RMSE, MAE, R² for forecasters; Accuracy, Kappa, ROC-AUC for classifiers — every model held to the same bar." },
+  { title: "Near real-time ingestion", desc: "Real data, no keys: Open-Meteo (ERA5 temperature & precipitation, ERA5-Land soil moisture, CAMS PM2.5 & NO₂) and NASA MODIS NDVI, pulled per region." },
+  { title: "Preprocessing", desc: "Physical-range validation and gap-fill interpolation clean every time series; MODIS NDVI keeps only clear-pixel composites." },
+  { title: "Feature engineering", desc: "7/30-day rolling statistics, anomaly scores, season and PCA compression build the model-ready matrix." },
+  { title: "Parallel ML/DL training", desc: "Random Forest and XGBoost classifiers; LSTM, CNN and Transformer forecasters plus their ensemble, trained per region on GPU." },
+  { title: "Validation", desc: "Chronological hold-out; RMSE, MAE, R² vs a naive repeat-last-value forecast; Accuracy, Kappa, ROC-AUC vs a naive predictor." },
   { title: "Index fusion", desc: "Air quality, vegetation, water and climate sub-indices combine into one weighted Environmental Health Index." },
   { title: "Interactive dashboard", desc: "This interface: country/state/city/continent comparison, trends, forecasts and model diagnostics." },
   { title: "Deployment & alerting", desc: "Threshold and rapid-decline detectors watch every region and raise watch / warning / critical alerts." },
@@ -692,7 +736,6 @@ async function init() {
     populateRegionSelect();
     renderPipelineSteps();
     renderAlerts();
-    renderModelComparison();
 
     const preferredRegion = state.regionMeta["IN"] ? "IN" : initialData.regions[0].region_id;
     selectRegion(preferredRegion);
@@ -709,7 +752,7 @@ async function init() {
         ...liveCore,
         mode: "live",
       };
-      state.regionMeta = Object.fromEntries(liveCore.regions.map((r) => [r.region_id, r]));
+      state.regionMeta = Object.fromEntries(liveCore.regions.map((r) => [r.region_id, { ...(state.regionMeta[r.region_id] || {}), ...r }]));
 
       if (genEl) genEl.textContent = `live snapshot ${liveCore.generated_at}`;
       if (modeEl) {
@@ -725,16 +768,6 @@ async function init() {
         selectRegion(state.currentRegion);
       }
 
-      // Asynchronously fetch live ML training report for the active region
-      const activeReg = state.currentRegion || (state.regionMeta["IN"] ? "IN" : liveCore.regions[0].region_id);
-      renderModelsLoading();
-      try {
-        state.data.training = await loadLiveTraining(activeReg);
-        renderModelComparison();
-      } catch (err) {
-        console.warn("Live training request failed:", err);
-        renderModelComparison();
-      }
       return;
     }
   } catch (err) {
